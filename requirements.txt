@@ -1,0 +1,10 @@
+streamlit
+langchain
+chromadb
+sentence-transformers
+ollama
+requests
+huggingface_hub
+python-dotenv
+fastapi
+uvicorn
