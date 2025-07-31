@@ -352,3 +352,52 @@ for sender, msg in st.session_state.chat_history:
         st.markdown(f"**{sender}:**")
         st.markdown(f"<div class='chat-bubble'>{msg}</div>", unsafe_allow_html=True)
 
+
+
+4 th 
+
+import os
+import streamlit as st
+from langchain.llms import OpenAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+
+# -------------------- SETUP --------------------
+# OPTIONAL: Set your OpenAI API key directly here for testing
+# Replace "your-api-key-here" with your actual key
+os.environ["OPENAI_API_KEY"] = "your-api-key-here"
+
+# -------------------- STREAMLIT UI --------------------
+st.set_page_config(page_title="GalaxyBot", layout="wide")
+st.title("🤖 GalaxyBot - Powered by OpenAI")
+
+st.markdown(
+    """
+    Welcome to **GalaxyBot**! Ask any question and get a smart response using OpenAI.
+    """
+)
+
+# -------------------- USER INPUT --------------------
+query = st.text_input("💬 Ask me anything")
+
+# -------------------- BOT RESPONSE --------------------
+if query:
+    with st.spinner("Thinking..."):
+        # Create OpenAI LLM
+        llm = OpenAI(temperature=0.7)
+
+        # Define prompt
+        prompt = PromptTemplate(
+            input_variables=["query"],
+            template="You are a helpful assistant. Answer this:\n{query}"
+        )
+
+        # Create chain
+        chain = LLMChain(llm=llm, prompt=prompt)
+
+        # Get answer
+        response = chain.run(query)
+
+        # Display result
+        st.success(response)
+
