@@ -361,43 +361,71 @@ import streamlit as st
 from langchain.llms import OpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
+from PyPDF2 import PdfReader
 
-# -------------------- SETUP --------------------
-# OPTIONAL: Set your OpenAI API key directly here for testing
-# Replace "your-api-key-here" with your actual key
-os.environ["OPENAI_API_KEY"] = "your-api-key-here"
+# ---------- OPENAI API SETUP ----------
+os.environ["OPENAI_API_KEY"] = "your-api-key-here"  # Replace with your OpenAI API key
 
-# -------------------- STREAMLIT UI --------------------
-st.set_page_config(page_title="GalaxyBot", layout="wide")
-st.title("🤖 GalaxyBot - Powered by OpenAI")
+# ---------- STREAMLIT CONFIG ----------
+st.set_page_config(page_title="GalaxyBot", layout="centered")
 
-st.markdown(
-    """
-    Welcome to **GalaxyBot**! Ask any question and get a smart response using OpenAI.
-    """
-)
+# ---------- GALAXY BACKGROUND STYLE ----------
+page_bg_img = """
+<style>
+body {
+background-image: url("https://images.unsplash.com/photo-1474237332535-3b824f02b5c1?ixlib=rb-4.0.3&auto=format&fit=crop&w=1950&q=80");
+background-size: cover;
+background-attachment: fixed;
+color: white;
+}
+.chat-container {
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 2rem;
+    border-radius: 10px;
+}
+</style>
+"""
+st.markdown(page_bg_img, unsafe_allow_html=True)
 
-# -------------------- USER INPUT --------------------
-query = st.text_input("💬 Ask me anything")
+# ---------- 3D ROBOT HEADER ----------
+st.image("https://i.ibb.co/2ytnsqt/robot-3d.gif", width=150)
+st.title("🤖 Welcome to GalaxyBot")
+st.markdown("Ask me anything, or upload a PDF and I'll answer from it!")
 
-# -------------------- BOT RESPONSE --------------------
-if query:
-    with st.spinner("Thinking..."):
-        # Create OpenAI LLM
-        llm = OpenAI(temperature=0.7)
+# ---------- PDF UPLOAD ----------
+uploaded_file = st.file_uploader("📄 Upload a PDF", type="pdf")
 
-        # Define prompt
-        prompt = PromptTemplate(
-            input_variables=["query"],
-            template="You are a helpful assistant. Answer this:\n{query}"
-        )
+pdf_text = ""
+if uploaded_file is not None:
+    reader = PdfReader(uploaded_file)
+    for page in reader.pages:
+        pdf_text += page.extract_text()
 
-        # Create chain
+# ---------- USER QUESTION ----------
+question = st.text_input("💬 Enter your question")
+
+# ---------- ANSWER SECTION ----------
+if question:
+    with st.spinner("🧠 Thinking..."):
+        llm = OpenAI(temperature=0.6)
+
+        # Use PDF context if available
+        if pdf_text:
+            full_prompt = f"""
+You are a helpful assistant. Answer the question based on the PDF content below:
+
+PDF Content:
+{pdf_text[:3000]}
+
+Question: {question}
+"""
+        else:
+            full_prompt = f"You are a helpful assistant. Answer this question:\n{question}"
+
+        prompt = PromptTemplate(input_variables=["input"], template="{input}")
         chain = LLMChain(llm=llm, prompt=prompt)
 
-        # Get answer
-        response = chain.run(query)
-
-        # Display result
+        response = chain.run(full_prompt)
         st.success(response)
+
 
