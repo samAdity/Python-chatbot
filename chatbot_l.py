@@ -205,3 +205,150 @@ for sender, msg in st.session_state.chat_history:
         st.markdown(f"**{sender}:**")
         st.markdown(f"<div class='chat-bubble'>{msg}</div>", unsafe_allow_html=True)
 
+
+
+
+3 rd file
+
+# main.py
+import streamlit as st
+from PyPDF2 import PdfReader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain.chains import RetrievalQA
+from langchain.chat_models import ChatOpenAI
+from langchain.agents import initialize_agent, Tool
+from langchain.agents.agent_types import AgentType
+from langchain.prompts import SystemMessagePromptTemplate
+from langdetect import detect
+from googletrans import Translator
+
+import os
+
+# ========== CONFIGURATION ==========
+OPENAI_API_KEY = "your-openai-api-key-here"  # <-- Replace this with your actual key
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+
+st.set_page_config(page_title="Galaxy Chatbot 🤖🌌", layout="wide")
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "vector_store" not in st.session_state:
+    st.session_state.vector_store = None
+if "top_k" not in st.session_state:
+    st.session_state.top_k = 3
+if "chunk_size" not in st.session_state:
+    st.session_state.chunk_size = 1000
+if "chunk_overlap" not in st.session_state:
+    st.session_state.chunk_overlap = 150
+
+# ========== UI STYLING ==========
+st.markdown("""
+    <style>
+        .stApp { background-color: #0b0c2a; color: #ffffff; }
+        .chat-bubble {
+            background-color: #222244;
+            padding: 10px;
+            border-radius: 10px;
+            margin: 5px 0px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title(":milky_way: GalaxyBot - Multilingual PDF Chat Assistant")
+
+# ========== PDF UPLOAD ==========
+with st.sidebar:
+    st.header("📂 Upload PDFs")
+    uploaded_files = st.file_uploader("Upload multiple PDFs", type="pdf", accept_multiple_files=True)
+    st.session_state.chunk_size = st.slider("Chunk Size", 500, 2000, st.session_state.chunk_size)
+    st.session_state.chunk_overlap = st.slider("Chunk Overlap", 0, 500, st.session_state.chunk_overlap)
+    st.session_state.top_k = st.slider("Top K Documents to Retrieve", 1, 10, st.session_state.top_k)
+    process_btn = st.button("🔍 Process Documents")
+
+# ========== TRANSLATION UTILS ==========
+translator = Translator()
+
+def detect_language(text):
+    try:
+        return detect(text)
+    except:
+        return "en"
+
+def translate_to_english(text):
+    lang = detect_language(text)
+    if lang != "en":
+        return translator.translate(text, src=lang, dest="en").text
+    return text
+
+def translate_to_original(text, original_lang):
+    if original_lang != "en":
+        return translator.translate(text, src="en", dest=original_lang).text
+    return text
+
+# ========== TEXT EXTRACTION ==========
+def extract_text_from_pdfs(files):
+    text = ""
+    for file in files:
+        pdf = PdfReader(file)
+        for page in pdf.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text
+    return text
+
+# ========== EMBEDDING & VECTOR DB ==========
+def build_vector_store(text, chunk_size, chunk_overlap):
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap
+    )
+    chunks = splitter.split_text(text)
+    embeddings = OpenAIEmbeddings()
+    return FAISS.from_texts(chunks, embeddings)
+
+# ========== PROCESS PDF ==========
+if process_btn and uploaded_files:
+    with st.spinner("Embedding documents, please wait..."):
+        raw_text = extract_text_from_pdfs(uploaded_files)
+        vs = build_vector_store(raw_text, st.session_state.chunk_size, st.session_state.chunk_overlap)
+        st.session_state.vector_store = vs
+    st.success("Documents embedded successfully!")
+
+# ========== QA Chain (ReAct Agent Style + Prompt Optimization) ==========
+llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.3, max_tokens=1000)
+
+system_prompt = SystemMessagePromptTemplate.from_template("""
+You are GalaxyBot, a multilingual, helpful assistant. Use only information from the provided documents to answer accurately.
+If unsure, say "I'm not sure based on the provided documents."
+""")
+
+# ========== CHAT INTERFACE ==========
+user_input = st.chat_input("Ask your question in any language...")
+if user_input and st.session_state.vector_store:
+    original_lang = detect_language(user_input)
+    english_query = translate_to_english(user_input)
+
+    docs = st.session_state.vector_store.similarity_search(english_query, k=st.session_state.top_k)
+    qa = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=st.session_state.vector_store.as_retriever(search_kwargs={"k": st.session_state.top_k}),
+        return_source_documents=True
+    )
+
+    with st.spinner("Generating response..."):
+        result = qa({"query": english_query})
+        answer = result["result"]
+        translated = translate_to_original(answer, original_lang)
+
+        st.session_state.chat_history.append(("You", user_input))
+        st.session_state.chat_history.append(("GalaxyBot 🤖", translated))
+
+# ========== DISPLAY CHAT ==========
+for sender, msg in st.session_state.chat_history:
+    with st.container():
+        st.markdown(f"**{sender}:**")
+        st.markdown(f"<div class='chat-bubble'>{msg}</div>", unsafe_allow_html=True)
+
