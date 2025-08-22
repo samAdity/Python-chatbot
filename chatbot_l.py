@@ -80,7 +80,7 @@ if file is not None:
 
 
 
-2 nd code 
+# 2 nd code 
 
 # main.py
 import streamlit as st
